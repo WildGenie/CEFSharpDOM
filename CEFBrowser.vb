@@ -10,12 +10,13 @@ Public Class CEFBrowser
 	Public Event DOMEvent(EventName As String, SourceIndex As Integer)
 
 	Public Document As New CEFDocument(Me)
-
 	Private ScriptDeferred As Boolean
 	Private DeferredScript As New List(Of String)
 
+	'Receives messages setup with addEventListener
 	Private WithEvents CEFMessage As New CEFMessage
 
+	'Add any listeners from here (comma separated list)
 	Public Sub AddListeners(EventNames As String)
 		Dim Code = ""
 		For Each Item In EventNames.Split(",")
@@ -30,6 +31,7 @@ Public Class CEFBrowser
 		End If
 	End Sub
 
+	'Raise listener eventwith sourceIndex of activeElement
 	Private Sub CEFMessage_DOMEvent(Msg As String, Idx As Integer) Handles CEFMessage.DOMEvent
 		BeginInvoke(Sub() RaiseDOMEvent(Msg, Idx))
 	End Sub
@@ -58,6 +60,7 @@ Public Class CEFBrowser
 		End If
 	End Sub
 
+	'Defer scripts
 	Public Sub DeferScript(Defer As Boolean)
 		If Defer Then
 			ScriptDeferred = True
@@ -69,6 +72,7 @@ Public Class CEFBrowser
 		End If
 	End Sub
 
+	'Evalscript: wraps EvalScriptAsync to catch errors and save having to escape {}
 	Public Function EvalScript(Code As String, ParamArray Params() As String) As String
 		For i = 0 To Params.UBound
 			Code = Code.Replace("{" & i & "}", Params(i))
@@ -76,9 +80,11 @@ Public Class CEFBrowser
 		Return EvalScriptSync("(function(){try{" & Code & "}catch(e){console.log(e.message);return ''}})()")
 	End Function
 
+	'Wait for EvalScriptAsync
 	Private Function EvalScriptSync(Code As String) As String
 		If Me.IsBrowserInitialized Then
 			Using Ret = Me.EvaluateScriptAsync(Code)
+				'Not using wait, so doesn't lock on breakpoints
 				Do
 					Application.DoEvents()
 				Loop Until Ret.IsCompleted
@@ -105,6 +111,7 @@ Public Class CEFBrowser
 	Private Sub OnDownloadUpdated(browser As IBrowser, downloadItem As DownloadItem, callback As IDownloadItemCallback) Implements IDownloadHandler.OnDownloadUpdated
 	End Sub
 
+	'Document has loaded or changed
 	Private Sub RaiseChangeEvent(Main As Boolean)
 		On Error Resume Next
 		If Main Then
@@ -114,6 +121,7 @@ Public Class CEFBrowser
 		End If
 	End Sub
 
+	'Raise DOM event added with addEventListener
 	Private Sub RaiseDOMEvent(Msg As String, Idx As String)
 		If Msg = "change" Then
 			TChange.Stop()
@@ -123,6 +131,7 @@ Public Class CEFBrowser
 		End If
 	End Sub
 
+	'Times out after 150ms to prevent MutationObserver events is quick succession
 	Private Sub TChange_Tick(sender As Object, e As EventArgs) Handles TChange.Tick
 		TChange.Stop()
 		ContentChanged(False)
@@ -130,6 +139,7 @@ Public Class CEFBrowser
 
 End Class
 
+'Wraps basic document functionality in a class
 Public Class CEFDocument
 	Public Event Message(Message As String, Element As CEFElement)
 	Public ReadOnly Chrome As CEFBrowser
@@ -179,7 +189,8 @@ Public Class CEFDocument
 		End Get
 	End Property
 
-	Public Sub Load(List As String)
+	Friend Sub Load(List As String)
+		'Load basic DOM tree details into our list
 		All.Clear()
 		Dim i As Integer
 		For Each Item In List.ToLower.Split
@@ -188,7 +199,7 @@ Public Class CEFDocument
 		Next
 	End Sub
 
-	Public Sub New(CEFBrowser As CEFBrowser)
+	Friend Sub New(CEFBrowser As CEFBrowser)
 		Chrome = CEFBrowser
 	End Sub
 
@@ -217,6 +228,7 @@ Public Class CEFDocument
 
 End Class
 
+'Wraps basic element functionality in a class
 Public Class CEFElement
 	Public ReadOnly Document As CEFDocument
 	Public ReadOnly SourceIndex As Integer
